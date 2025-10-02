@@ -4,6 +4,7 @@ import GameCanvas from '@/components/game/GameCanvas';
 import HealthBar from '@/components/game/HealthBar';
 import ControlsTab from '@/components/game/ControlsTab';
 import CombosTab from '@/components/game/CombosTab';
+import MobileControls from '@/components/game/MobileControls';
 import { useGameLogic } from '@/components/game/useGameLogic';
 
 const Index = () => {
@@ -33,13 +34,31 @@ const Index = () => {
         </Card>
 
         <Tabs defaultValue="controls" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="controls">Управление</TabsTrigger>
-            <TabsTrigger value="combos">Комбо Удары</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="controls">Клавиатура</TabsTrigger>
+            <TabsTrigger value="mobile">Сенсор</TabsTrigger>
+            <TabsTrigger value="combos">Комбо</TabsTrigger>
           </TabsList>
           
           <TabsContent value="controls" className="space-y-4">
             <ControlsTab fighter1={fighter1} fighter2={fighter2} />
+          </TabsContent>
+
+          <TabsContent value="mobile" className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <Card className="p-4">
+                <h3 className="font-bold mb-4 text-center" style={{ color: fighter1.color }}>
+                  Player 1
+                </h3>
+                <MobileControls playerId={1} color={fighter1.color} />
+              </Card>
+              <Card className="p-4">
+                <h3 className="font-bold mb-4 text-center" style={{ color: fighter2.color }}>
+                  Player 2
+                </h3>
+                <MobileControls playerId={2} color={fighter2.color} />
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="combos" className="space-y-4">
