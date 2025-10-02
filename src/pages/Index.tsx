@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import Icon from '@/components/ui/icon';
 import GameCanvas from '@/components/game/GameCanvas';
 import HealthBar from '@/components/game/HealthBar';
 import ControlsTab from '@/components/game/ControlsTab';
@@ -9,13 +12,38 @@ import { useGameLogic } from '@/components/game/useGameLogic';
 
 const Index = () => {
   const { fighter1, fighter2, particles, gameStarted, winner, startGame } = useGameLogic();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1F2937] via-[#1a1f2e] to-[#111827] flex flex-col p-4">
       <div className="w-full flex-1 flex flex-col">
-        <h1 className="text-4xl md:text-6xl font-black text-center mb-4 md:mb-8 gradient-purple-pink bg-clip-text text-transparent">
-          PORTAL COMBAT
-        </h1>
+        <div className="flex items-center justify-between mb-4 md:mb-8">
+          <div className="flex-1"></div>
+          <h1 className="text-4xl md:text-6xl font-black text-center gradient-purple-pink bg-clip-text text-transparent">
+            PORTAL COMBAT
+          </h1>
+          <div className="flex-1 flex justify-end">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleFullscreen}
+              className="border-primary/50 hover:border-primary"
+              title={isFullscreen ? 'Выход из полноэкранного режима' : 'Полноэкранный режим'}
+            >
+              <Icon name={isFullscreen ? 'Minimize' : 'Maximize'} size={20} />
+            </Button>
+          </div>
+        </div>
 
         <Card className="bg-card border-2 border-primary p-4 md:p-6 mb-4 flex-1 flex flex-col min-h-0">
           <div className="grid grid-cols-2 gap-3 md:gap-6 mb-3 md:mb-4">
