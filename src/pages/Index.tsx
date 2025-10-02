@@ -11,26 +11,28 @@ const Index = () => {
   const { fighter1, fighter2, particles, gameStarted, winner, startGame } = useGameLogic();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1F2937] via-[#1a1f2e] to-[#111827] flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl">
-        <h1 className="text-6xl font-black text-center mb-8 gradient-purple-pink bg-clip-text text-transparent">
+    <div className="min-h-screen bg-gradient-to-br from-[#1F2937] via-[#1a1f2e] to-[#111827] flex flex-col p-4">
+      <div className="w-full flex-1 flex flex-col">
+        <h1 className="text-4xl md:text-6xl font-black text-center mb-4 md:mb-8 gradient-purple-pink bg-clip-text text-transparent">
           PORTAL COMBAT
         </h1>
 
-        <Card className="bg-card border-2 border-primary p-6 mb-4">
-          <div className="grid grid-cols-2 gap-6 mb-4">
+        <Card className="bg-card border-2 border-primary p-4 md:p-6 mb-4 flex-1 flex flex-col min-h-0">
+          <div className="grid grid-cols-2 gap-3 md:gap-6 mb-3 md:mb-4">
             <HealthBar fighter={fighter1} />
             <HealthBar fighter={fighter2} />
           </div>
 
-          <GameCanvas
-            fighter1={fighter1}
-            fighter2={fighter2}
-            particles={particles}
-            gameStarted={gameStarted}
-            winner={winner}
-            onStartGame={startGame}
-          />
+          <div className="flex-1 min-h-0">
+            <GameCanvas
+              fighter1={fighter1}
+              fighter2={fighter2}
+              particles={particles}
+              gameStarted={gameStarted}
+              winner={winner}
+              onStartGame={startGame}
+            />
+          </div>
         </Card>
 
         <Tabs defaultValue="controls" className="w-full">

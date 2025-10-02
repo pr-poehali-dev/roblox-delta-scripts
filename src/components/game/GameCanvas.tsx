@@ -126,12 +126,12 @@ const GameCanvas = ({ fighter1, fighter2, particles, gameStarted, winner, onStar
   }, [fighter1, fighter2, particles]);
 
   return (
-    <div className="relative">
+    <div className="relative w-full h-full">
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="w-full border-2 border-border rounded-lg"
+        className="w-full h-full object-contain border-2 border-border rounded-lg"
       />
       
       {!gameStarted && (
