@@ -40,14 +40,16 @@ const MOVE_SPEED = 5;
 const ATTACK_DAMAGE = 10;
 const FIRE_DAMAGE = 25;
 const HEAVY_DAMAGE = 35;
+const FATALITY_DAMAGE = 100;
 const ATTACK_RANGE = 60;
-const COMBO_TIMEOUT = 800;
+const COMBO_TIMEOUT = 1200;
 
 const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
   const [showComboMenu, setShowComboMenu] = useState(true);
+  const [fatalityActive, setFatalityActive] = useState(false);
   const keysPressed = useRef<Set<string>>(new Set());
   const [particles, setParticles] = useState<Particle[]>([]);
   const comboTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -110,7 +112,15 @@ const Index = () => {
       let damage = ATTACK_DAMAGE;
       let particleColor = attacker.color;
       
-      if (attacker.comboMove === 'fire') {
+      if (attacker.comboMove === 'fatality') {
+        damage = FATALITY_DAMAGE;
+        particleColor = '#8B00FF';
+        setFatalityActive(true);
+        createParticles(defender.x + 25, defender.y + 40, '#8B00FF', 50);
+        createParticles(defender.x + 25, defender.y + 40, '#FF0000', 50);
+        createParticles(defender.x + 25, defender.y + 40, '#FFD700', 50);
+        setTimeout(() => setFatalityActive(false), 2000);
+      } else if (attacker.comboMove === 'fire') {
         damage = FIRE_DAMAGE;
         particleColor = '#FF6B00';
         createParticles(defender.x + 25, defender.y + 40, particleColor, 30);
@@ -134,13 +144,14 @@ const Index = () => {
 
   const checkCombo = (sequence: string[], player: 1 | 2): string | null => {
     const seqStr = sequence.join('');
-    const player1Keys = ['a', 'f'];
-    const player2Keys = ['arrowleft', 'shift'];
+    const player1Keys = { move: 'a', attack1: 'f', attack2: 's', special: 'q' };
+    const player2Keys = { move: 'arrowleft', attack1: 'shift', attack2: 'arrowdown', special: 'enter' };
     
     const keys = player === 1 ? player1Keys : player2Keys;
     
-    if (seqStr === keys[0] + keys[1]) return 'fire';
-    if (seqStr === keys[1] + keys[1]) return 'heavy';
+    if (seqStr === keys.move + keys.attack1 + keys.attack1 + keys.special) return 'fatality';
+    if (seqStr === keys.move + keys.attack1) return 'fire';
+    if (seqStr === keys.attack1 + keys.attack1) return 'heavy';
     
     return null;
   };
@@ -150,9 +161,9 @@ const Index = () => {
       const key = e.key.toLowerCase();
       keysPressed.current.add(key);
       
-      if (key === 'f') {
+      if (['a', 'f', 's', 'q'].includes(key)) {
         setFighter1(prev => {
-          const newSeq = [...prev.keySequence, key].slice(-2);
+          const newSeq = [...prev.keySequence, key].slice(-4);
           const combo = checkCombo(newSeq, 1);
           
           if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
@@ -164,9 +175,9 @@ const Index = () => {
         });
       }
       
-      if (key === 'shift') {
+      if (['arrowleft', 'shift', 'arrowdown', 'enter'].includes(key)) {
         setFighter2(prev => {
-          const newSeq = [...prev.keySequence, key].slice(-2);
+          const newSeq = [...prev.keySequence, key].slice(-4);
           const combo = checkCombo(newSeq, 2);
           
           if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
@@ -367,7 +378,35 @@ const Index = () => {
       ctx.fillRect(fighter.x + 15, fighter.y + 20, 8, 8);
       ctx.fillRect(fighter.x + 27, fighter.y + 20, 8, 8);
 
-      if (fighter.comboMove === 'fire') {
+      if (fighter.comboMove === 'fatality') {
+        ctx.save();
+        ctx.globalAlpha = 0.3 + Math.random() * 0.3;
+        ctx.fillStyle = '#8B00FF';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.restore();
+        
+        ctx.fillStyle = '#8B00FF';
+        const punchX = fighter.direction === 'right' ? fighter.x + 50 : fighter.x - 60;
+        ctx.fillRect(punchX, fighter.y + 15, 60, 40);
+        
+        for (let i = 0; i < 5; i++) {
+          const gradient = ctx.createRadialGradient(punchX + 30, fighter.y + 35, 5, punchX + 30, fighter.y + 35, 20 + i * 10);
+          gradient.addColorStop(0, '#8B00FF');
+          gradient.addColorStop(0.5, '#FF00FF');
+          gradient.addColorStop(1, 'transparent');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(punchX + 30, fighter.y + 35, 20 + i * 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 24px Montserrat';
+        ctx.strokeStyle = '#8B00FF';
+        ctx.lineWidth = 4;
+        ctx.strokeText('💀 FATALITY', CANVAS_WIDTH / 2 - 80, 50);
+        ctx.fillText('💀 FATALITY', CANVAS_WIDTH / 2 - 80, 50);
+      } else if (fighter.comboMove === 'fire') {
         ctx.fillStyle = '#FF6B00';
         const punchX = fighter.direction === 'right' ? fighter.x + 50 : fighter.x - 40;
         ctx.fillRect(punchX, fighter.y + 25, 40, 20);
@@ -441,8 +480,8 @@ const Index = () => {
               </div>
               <Progress value={(fighter1.health / fighter1.maxHealth) * 100} className="h-4" />
               {fighter1.comboMove && (
-                <div className="mt-2 text-sm font-bold text-orange-400">
-                  🔥 COMBO: {fighter1.comboMove === 'fire' ? 'FIRE STRIKE!' : 'HEAVY PUNCH!'}
+                <div className={`mt-2 text-sm font-bold ${fighter1.comboMove === 'fatality' ? 'text-purple-400 text-lg animate-pulse' : 'text-orange-400'}`}>
+                  {fighter1.comboMove === 'fatality' ? '💀 FATALITY!' : fighter1.comboMove === 'fire' ? '🔥 FIRE STRIKE!' : '💥 HEAVY PUNCH!'}
                 </div>
               )}
             </div>
@@ -453,8 +492,8 @@ const Index = () => {
               </div>
               <Progress value={(fighter2.health / fighter2.maxHealth) * 100} className="h-4" />
               {fighter2.comboMove && (
-                <div className="mt-2 text-sm font-bold text-orange-400">
-                  🔥 COMBO: {fighter2.comboMove === 'fire' ? 'FIRE STRIKE!' : 'HEAVY PUNCH!'}
+                <div className={`mt-2 text-sm font-bold ${fighter2.comboMove === 'fatality' ? 'text-purple-400 text-lg animate-pulse' : 'text-orange-400'}`}>
+                  {fighter2.comboMove === 'fatality' ? '💀 FATALITY!' : fighter2.comboMove === 'fire' ? '🔥 FIRE STRIKE!' : '💥 HEAVY PUNCH!'}
                 </div>
               )}
             </div>
@@ -577,6 +616,22 @@ const Index = () => {
                       <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">F</kbd>
                     </div>
                   </div>
+                  
+                  <div className="bg-muted p-3 rounded-lg border-2 border-purple-500 animate-pulse">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-purple-400">💀 ФАТАЛИТИ</span>
+                      <span className="text-xs text-red-400 font-bold">100 урона!</span>
+                    </div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">A</kbd>
+                      <span className="text-gray-400">+</span>
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">F</kbd>
+                      <span className="text-gray-400">+</span>
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">F</kbd>
+                      <span className="text-gray-400">+</span>
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">Q</kbd>
+                    </div>
+                  </div>
                 </div>
               </Card>
 
@@ -609,6 +664,22 @@ const Index = () => {
                       <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">SHIFT</kbd>
                     </div>
                   </div>
+                  
+                  <div className="bg-muted p-3 rounded-lg border-2 border-purple-500 animate-pulse">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-purple-400">💀 ФАТАЛИТИ</span>
+                      <span className="text-xs text-red-400 font-bold">100 урона!</span>
+                    </div>
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <kbd className="px-2 py-1 bg-background rounded font-mono text-xs">←</kbd>
+                      <span className="text-gray-400 text-xs">+</span>
+                      <kbd className="px-2 py-1 bg-background rounded font-mono text-xs">SHIFT</kbd>
+                      <span className="text-gray-400 text-xs">+</span>
+                      <kbd className="px-2 py-1 bg-background rounded font-mono text-xs">SHIFT</kbd>
+                      <span className="text-gray-400 text-xs">+</span>
+                      <kbd className="px-2 py-1 bg-background rounded font-mono text-xs">ENTER</kbd>
+                    </div>
+                  </div>
                 </div>
               </Card>
             </div>
@@ -618,7 +689,17 @@ const Index = () => {
                 <Icon name="Info" className="text-primary flex-shrink-0 mt-0.5" size={20} />
                 <div className="text-sm text-gray-300">
                   <p className="font-bold mb-1">Как использовать комбо:</p>
-                  <p>Быстро нажимайте клавиши одну за другой. Между нажатиями должно пройти менее 0.8 секунды. Комбо активируется автоматически при правильной последовательности!</p>
+                  <p>Быстро нажимайте клавиши одну за другой. Между нажатиями должно пройти менее 1.2 секунды. Комбо активируется автоматически при правильной последовательности!</p>
+                </div>
+              </div>
+            </Card>
+            
+            <Card className="bg-purple-950/30 border-2 border-purple-500 p-4">
+              <div className="flex gap-3">
+                <Icon name="Skull" className="text-purple-400 flex-shrink-0 mt-0.5" size={24} />
+                <div className="text-sm text-gray-300">
+                  <p className="font-bold mb-1 text-purple-400 text-lg">⚠️ ФАТАЛИТИ - Финишный Удар!</p>
+                  <p>Мгновенно наносит 100 урона - гарантированная победа! Используйте, когда противник близко. Это самая мощная атака в игре с невероятными визуальными эффектами!</p>
                 </div>
               </div>
             </Card>
