@@ -1,371 +1,369 @@
-import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect, useRef } from 'react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import Icon from '@/components/ui/icon';
 
-interface Script {
+interface Fighter {
   id: number;
-  title: string;
-  description: string;
-  category: string;
-  downloads: number;
-  code: string;
+  name: string;
+  x: number;
+  y: number;
+  health: number;
+  maxHealth: number;
+  color: string;
+  direction: 'left' | 'right';
+  isAttacking: boolean;
+  velocityY: number;
+  isJumping: boolean;
 }
 
-const CATEGORIES = ['Все', 'Популярные', 'FPS', 'RPG', 'Симуляторы', 'Утилиты'];
-
-const SCRIPTS: Script[] = [
-  {
-    id: 1,
-    title: 'Aimbot Pro',
-    description: 'Продвинутый скрипт для точного прицеливания в любых FPS играх',
-    category: 'FPS',
-    downloads: 15420,
-    code: `-- Aimbot Pro Script for Delta
-local player = game.Players.LocalPlayer
-local camera = workspace.CurrentCamera
-
-function getClosestEnemy()
-    local closest, distance = nil, math.huge
-    for _, v in pairs(game.Players:GetPlayers()) do
-        if v ~= player and v.Character and v.Character:FindFirstChild("Head") then
-            local magnitude = (v.Character.Head.Position - player.Character.Head.Position).magnitude
-            if magnitude < distance then
-                closest, distance = v, magnitude
-            end
-        end
-    end
-    return closest
-end
-
-game:GetService("RunService").RenderStepped:Connect(function()
-    local target = getClosestEnemy()
-    if target and target.Character then
-        camera.CFrame = CFrame.new(camera.CFrame.Position, target.Character.Head.Position)
-    end
-end)`
-  },
-  {
-    id: 2,
-    title: 'Speed Hack Ultra',
-    description: 'Ускорение передвижения персонажа с настраиваемой скоростью',
-    category: 'Утилиты',
-    downloads: 12890,
-    code: `-- Speed Hack Ultra for Delta
-local speed = 100 -- Измените скорость здесь
-local player = game.Players.LocalPlayer
-
-player.Character.Humanoid.WalkSpeed = speed
-
-player.Character.Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-    player.Character.Humanoid.WalkSpeed = speed
-end)`
-  },
-  {
-    id: 3,
-    title: 'Auto Farm Master',
-    description: 'Автоматический фарм ресурсов для симуляторов и RPG игр',
-    category: 'Симуляторы',
-    downloads: 18350,
-    code: `-- Auto Farm Master for Delta
-local player = game.Players.LocalPlayer
-local farming = true
-
-while farming do
-    for _, item in pairs(workspace:GetDescendants()) do
-        if item:IsA("Part") and item.Name == "Coin" then
-            player.Character.HumanoidRootPart.CFrame = item.CFrame
-            wait(0.1)
-        end
-    end
-    wait(1)
-end`
-  },
-  {
-    id: 4,
-    title: 'ESP Wallhack',
-    description: 'Показывает врагов через стены с индикаторами здоровья',
-    category: 'FPS',
-    downloads: 9870,
-    code: `-- ESP Wallhack for Delta
-local player = game.Players.LocalPlayer
-
-for _, v in pairs(game.Players:GetPlayers()) do
-    if v ~= player then
-        local highlight = Instance.new("Highlight")
-        highlight.Parent = v.Character
-        highlight.FillColor = Color3.fromRGB(255, 0, 0)
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    end
-end`
-  },
-  {
-    id: 5,
-    title: 'Infinite Jump',
-    description: 'Бесконечные прыжки для преодоления любых препятствий',
-    category: 'Утилиты',
-    downloads: 7650,
-    code: `-- Infinite Jump for Delta
-local player = game.Players.LocalPlayer
-local mouse = player:GetMouse()
-
-mouse.KeyDown:Connect(function(key)
-    if key == " " then
-        player.Character.Humanoid:ChangeState(3)
-    end
-end)`
-  },
-  {
-    id: 6,
-    title: 'God Mode Shield',
-    description: 'Защита от урона и неуязвимость персонажа',
-    category: 'RPG',
-    downloads: 14230,
-    code: `-- God Mode Shield for Delta
-local player = game.Players.LocalPlayer
-
-player.Character.Humanoid.MaxHealth = math.huge
-player.Character.Humanoid.Health = math.huge
-
-player.Character.Humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-    player.Character.Humanoid.Health = math.huge
-end)`
-  },
-  {
-    id: 7,
-    title: 'Teleport Pro',
-    description: 'Телепортация к любой точке на карте мгновенно',
-    category: 'Утилиты',
-    downloads: 11540,
-    code: `-- Teleport Pro for Delta
-local player = game.Players.LocalPlayer
-local mouse = player:GetMouse()
-
-mouse.KeyDown:Connect(function(key)
-    if key == "t" then
-        player.Character.HumanoidRootPart.CFrame = CFrame.new(mouse.Hit.Position)
-    end
-end)
-
-print("Press 'T' to teleport to mouse position")`
-  },
-  {
-    id: 8,
-    title: 'Auto Clicker',
-    description: 'Автоматические клики для симуляторов и кликеров',
-    category: 'Симуляторы',
-    downloads: 16780,
-    code: `-- Auto Clicker for Delta
-local clicking = true
-
-while clicking do
-    mouse1click()
-    wait(0.01) -- Задержка между кликами
-end`
-  }
-];
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 400;
+const GROUND_Y = 320;
+const GRAVITY = 0.8;
+const JUMP_FORCE = -15;
+const MOVE_SPEED = 5;
+const ATTACK_DAMAGE = 10;
+const ATTACK_RANGE = 60;
 
 const Index = () => {
-  const [selectedCategory, setSelectedCategory] = useState('Все');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedScript, setSelectedScript] = useState<Script | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const filteredScripts = SCRIPTS.filter(script => {
-    const matchesCategory = selectedCategory === 'Все' || script.category === selectedCategory;
-    const matchesSearch = script.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          script.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [winner, setWinner] = useState<string | null>(null);
+  const keysPressed = useRef<Set<string>>(new Set());
+  
+  const [fighter1, setFighter1] = useState<Fighter>({
+    id: 1,
+    name: 'Player 1',
+    x: 150,
+    y: GROUND_Y,
+    health: 100,
+    maxHealth: 100,
+    color: '#3B82F6',
+    direction: 'right',
+    isAttacking: false,
+    velocityY: 0,
+    isJumping: false
   });
 
+  const [fighter2, setFighter2] = useState<Fighter>({
+    id: 2,
+    name: 'Player 2',
+    x: 600,
+    y: GROUND_Y,
+    health: 100,
+    maxHealth: 100,
+    color: '#EF4444',
+    direction: 'left',
+    isAttacking: false,
+    velocityY: 0,
+    isJumping: false
+  });
+
+  const checkCollision = (f1: Fighter, f2: Fighter): boolean => {
+    const distance = Math.abs(f1.x - f2.x);
+    return distance < ATTACK_RANGE && Math.abs(f1.y - f2.y) < 50;
+  };
+
+  const attack = (attacker: Fighter, defender: Fighter, setDefender: Function) => {
+    if (attacker.isAttacking && checkCollision(attacker, defender)) {
+      const newHealth = Math.max(0, defender.health - ATTACK_DAMAGE);
+      setDefender((prev: Fighter) => ({ ...prev, health: newHealth }));
+      
+      if (newHealth === 0) {
+        setWinner(attacker.name);
+        setGameStarted(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keysPressed.current.add(e.key.toLowerCase());
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysPressed.current.delete(e.key.toLowerCase());
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!gameStarted) return;
+
+    const gameLoop = setInterval(() => {
+      setFighter1(prev => {
+        let newX = prev.x;
+        let newY = prev.y;
+        let newVelocityY = prev.velocityY;
+        let newIsJumping = prev.isJumping;
+        let newDirection = prev.direction;
+        let newIsAttacking = false;
+
+        if (keysPressed.current.has('a') && newX > 50) {
+          newX -= MOVE_SPEED;
+          newDirection = 'left';
+        }
+        if (keysPressed.current.has('d') && newX < CANVAS_WIDTH - 100) {
+          newX += MOVE_SPEED;
+          newDirection = 'right';
+        }
+        if (keysPressed.current.has('w') && !newIsJumping) {
+          newVelocityY = JUMP_FORCE;
+          newIsJumping = true;
+        }
+        if (keysPressed.current.has(' ')) {
+          newIsAttacking = true;
+          setTimeout(() => {
+            setFighter1(f => ({ ...f, isAttacking: false }));
+          }, 200);
+        }
+
+        newVelocityY += GRAVITY;
+        newY += newVelocityY;
+
+        if (newY >= GROUND_Y) {
+          newY = GROUND_Y;
+          newVelocityY = 0;
+          newIsJumping = false;
+        }
+
+        return {
+          ...prev,
+          x: newX,
+          y: newY,
+          velocityY: newVelocityY,
+          isJumping: newIsJumping,
+          direction: newDirection,
+          isAttacking: newIsAttacking
+        };
+      });
+
+      setFighter2(prev => {
+        let newX = prev.x;
+        let newY = prev.y;
+        let newVelocityY = prev.velocityY;
+        let newIsJumping = prev.isJumping;
+        let newDirection = prev.direction;
+        let newIsAttacking = false;
+
+        if (keysPressed.current.has('arrowleft') && newX > 50) {
+          newX -= MOVE_SPEED;
+          newDirection = 'left';
+        }
+        if (keysPressed.current.has('arrowright') && newX < CANVAS_WIDTH - 100) {
+          newX += MOVE_SPEED;
+          newDirection = 'right';
+        }
+        if (keysPressed.current.has('arrowup') && !newIsJumping) {
+          newVelocityY = JUMP_FORCE;
+          newIsJumping = true;
+        }
+        if (keysPressed.current.has('enter')) {
+          newIsAttacking = true;
+          setTimeout(() => {
+            setFighter2(f => ({ ...f, isAttacking: false }));
+          }, 200);
+        }
+
+        newVelocityY += GRAVITY;
+        newY += newVelocityY;
+
+        if (newY >= GROUND_Y) {
+          newY = GROUND_Y;
+          newVelocityY = 0;
+          newIsJumping = false;
+        }
+
+        return {
+          ...prev,
+          x: newX,
+          y: newY,
+          velocityY: newVelocityY,
+          isJumping: newIsJumping,
+          direction: newDirection,
+          isAttacking: newIsAttacking
+        };
+      });
+    }, 1000 / 60);
+
+    return () => clearInterval(gameLoop);
+  }, [gameStarted]);
+
+  useEffect(() => {
+    if (fighter1.isAttacking) {
+      attack(fighter1, fighter2, setFighter2);
+    }
+  }, [fighter1.isAttacking]);
+
+  useEffect(() => {
+    if (fighter2.isAttacking) {
+      attack(fighter2, fighter1, setFighter1);
+    }
+  }, [fighter2.isAttacking]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.fillStyle = '#1a1f2e';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.fillStyle = '#2d3748';
+    ctx.fillRect(0, GROUND_Y + 30, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y - 30);
+
+    const drawFighter = (fighter: Fighter) => {
+      ctx.save();
+      
+      ctx.fillStyle = fighter.color;
+      ctx.fillRect(fighter.x, fighter.y, 50, 80);
+      
+      ctx.fillStyle = '#FFF';
+      ctx.fillRect(fighter.x + 15, fighter.y + 20, 8, 8);
+      ctx.fillRect(fighter.x + 27, fighter.y + 20, 8, 8);
+
+      if (fighter.isAttacking) {
+        ctx.fillStyle = fighter.color;
+        const punchX = fighter.direction === 'right' ? fighter.x + 50 : fighter.x - 30;
+        ctx.fillRect(punchX, fighter.y + 30, 30, 15);
+        
+        ctx.strokeStyle = '#FFFF00';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(punchX + 15, fighter.y + 37, 20, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    };
+
+    drawFighter(fighter1);
+    drawFighter(fighter2);
+  }, [fighter1, fighter2]);
+
+  const startGame = () => {
+    setFighter1(prev => ({ ...prev, health: 100 }));
+    setFighter2(prev => ({ ...prev, health: 100 }));
+    setWinner(null);
+    setGameStarted(true);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1F2937] via-[#1a1f2e] to-[#111827]">
-      <div className="container mx-auto px-4 py-8">
-        <header className="mb-12 text-center">
-          <h1 className="text-6xl font-black mb-4 gradient-purple-pink bg-clip-text text-transparent">
-            DELTA SCRIPTS
-          </h1>
-          <p className="text-xl text-gray-300">Топовые скрипты для Roblox Delta Executor</p>
-        </header>
+    <div className="min-h-screen bg-gradient-to-br from-[#1F2937] via-[#1a1f2e] to-[#111827] flex items-center justify-center p-4">
+      <div className="w-full max-w-5xl">
+        <h1 className="text-6xl font-black text-center mb-8 gradient-purple-pink bg-clip-text text-transparent">
+          PORTAL COMBAT
+        </h1>
 
-        <div className="mb-8">
-          <div className="relative max-w-2xl mx-auto mb-6">
-            <Icon name="Search" className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <Input
-              type="text"
-              placeholder="Поиск скриптов..."
-              className="pl-12 h-14 bg-card border-2 border-border text-lg"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+        <Card className="bg-card border-2 border-primary p-6 mb-4">
+          <div className="grid grid-cols-2 gap-6 mb-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-lg" style={{ color: fighter1.color }}>{fighter1.name}</span>
+                <span className="text-sm text-gray-400">{fighter1.health} HP</span>
+              </div>
+              <Progress value={(fighter1.health / fighter1.maxHealth) * 100} className="h-4" />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-lg" style={{ color: fighter2.color }}>{fighter2.name}</span>
+                <span className="text-sm text-gray-400">{fighter2.health} HP</span>
+              </div>
+              <Progress value={(fighter2.health / fighter2.maxHealth) * 100} className="h-4" />
+            </div>
+          </div>
+
+          <div className="relative">
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              className="w-full border-2 border-border rounded-lg"
             />
-          </div>
-
-          <div className="flex flex-wrap gap-3 justify-center">
-            {CATEGORIES.map(category => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? "default" : "outline"}
-                onClick={() => setSelectedCategory(category)}
-                className={`font-semibold px-6 py-2 ${
-                  selectedCategory === category 
-                    ? 'gradient-purple-pink border-0' 
-                    : 'border-2 border-primary/50 hover:border-primary bg-card/50'
-                }`}
-              >
-                {category}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredScripts.map(script => (
-            <Card 
-              key={script.id} 
-              className="bg-card border-2 border-border hover:border-primary transition-all duration-300 hover-scale overflow-hidden group"
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between mb-2">
-                  <Icon name="Code" className="text-primary" size={28} />
-                  <Badge variant="secondary" className="gradient-purple-pink border-0">
-                    {script.category}
-                  </Badge>
-                </div>
-                <CardTitle className="text-xl mb-2">{script.title}</CardTitle>
-                <CardDescription className="text-gray-400 text-sm">
-                  {script.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Icon name="Download" size={16} />
-                    <span>{script.downloads.toLocaleString()}</span>
-                  </div>
+            
+            {!gameStarted && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70 rounded-lg">
+                <div className="text-center">
+                  {winner ? (
+                    <>
+                      <Icon name="Trophy" className="mx-auto mb-4 text-yellow-400" size={64} />
+                      <h2 className="text-4xl font-black mb-4 gradient-purple-pink bg-clip-text text-transparent">
+                        {winner} WINS!
+                      </h2>
+                    </>
+                  ) : (
+                    <Icon name="Swords" className="mx-auto mb-4 text-primary" size={64} />
+                  )}
                   <Button 
-                    className="gradient-purple-pink font-bold border-0 hover:opacity-90"
-                    size="sm"
-                    onClick={() => setSelectedScript(script)}
+                    onClick={startGame} 
+                    size="lg"
+                    className="gradient-purple-pink font-bold text-xl px-8 py-6 border-0"
                   >
-                    Скачать
+                    {winner ? 'ИГРАТЬ СНОВА' : 'СТАРТ'}
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {filteredScripts.length === 0 && (
-          <div className="text-center py-20">
-            <Icon name="SearchX" className="mx-auto mb-4 text-gray-500" size={64} />
-            <p className="text-2xl text-gray-400">Скрипты не найдены</p>
-            <p className="text-gray-500 mt-2">Попробуйте изменить фильтры или поисковый запрос</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </Card>
 
-      {selectedScript && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50" onClick={() => setSelectedScript(null)}>
-          <Card className="bg-card border-2 border-primary max-w-3xl w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Icon name="Code" className="text-primary" size={32} />
-                    <Badge variant="secondary" className="gradient-purple-pink border-0">
-                      {selectedScript.category}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-3xl mb-2">{selectedScript.title}</CardTitle>
-                  <CardDescription className="text-gray-400">
-                    {selectedScript.description}
-                  </CardDescription>
-                </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={() => setSelectedScript(null)}
-                  className="ml-4"
-                >
-                  <Icon name="X" size={24} />
-                </Button>
+        <div className="grid grid-cols-2 gap-4">
+          <Card className="bg-card border border-border p-4">
+            <h3 className="font-bold mb-3 flex items-center gap-2" style={{ color: fighter1.color }}>
+              <Icon name="Gamepad2" size={20} />
+              Player 1 Управление
+            </h3>
+            <div className="space-y-2 text-sm text-gray-300">
+              <div className="flex justify-between">
+                <span>Движение:</span>
+                <span className="font-mono bg-muted px-2 rounded">A / D</span>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <Icon name="Download" size={20} />
-                    <span>{selectedScript.downloads.toLocaleString()} загрузок</span>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedScript.code);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                    className="gradient-purple-pink border-0"
-                  >
-                    <Icon name={copied ? "Check" : "Copy"} size={16} className="mr-2" />
-                    {copied ? 'Скопировано!' : 'Копировать код'}
-                  </Button>
-                </div>
-
-                <div className="bg-muted p-4 rounded-lg border border-border">
-                  <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
-                    <Icon name="FileCode" size={20} className="text-primary" />
-                    Код скрипта
-                  </h3>
-                  <pre className="text-sm overflow-x-auto p-4 bg-background rounded border border-border">
-                    <code className="text-gray-300">{selectedScript.code}</code>
-                  </pre>
-                </div>
-
-                <div className="bg-muted p-4 rounded-lg border border-border">
-                  <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
-                    <Icon name="Info" size={20} className="text-primary" />
-                    Инструкция по установке
-                  </h3>
-                  <ol className="space-y-2 text-sm text-gray-300">
-                    <li className="flex gap-2">
-                      <span className="font-bold gradient-purple-pink bg-clip-text text-transparent">1.</span>
-                      <span>Запустите Delta Executor</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="font-bold gradient-purple-pink bg-clip-text text-transparent">2.</span>
-                      <span>Нажмите кнопку "Копировать код" выше</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="font-bold gradient-purple-pink bg-clip-text text-transparent">3.</span>
-                      <span>Вставьте код в окно Delta (Ctrl+V)</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="font-bold gradient-purple-pink bg-clip-text text-transparent">4.</span>
-                      <span>Зайдите в игру Roblox</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="font-bold gradient-purple-pink bg-clip-text text-transparent">5.</span>
-                      <span>Нажмите "Execute" в Delta</span>
-                    </li>
-                  </ol>
-                </div>
-
-                <div className="bg-destructive/10 border border-destructive/30 p-4 rounded-lg">
-                  <div className="flex gap-2">
-                    <Icon name="AlertTriangle" size={20} className="text-destructive flex-shrink-0 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-bold text-destructive mb-1">Предупреждение</p>
-                      <p className="text-gray-300">Использование скриптов может привести к бану аккаунта. Используйте на свой риск!</p>
-                    </div>
-                  </div>
-                </div>
+              <div className="flex justify-between">
+                <span>Прыжок:</span>
+                <span className="font-mono bg-muted px-2 rounded">W</span>
               </div>
-            </CardContent>
+              <div className="flex justify-between">
+                <span>Атака:</span>
+                <span className="font-mono bg-muted px-2 rounded">SPACE</span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="bg-card border border-border p-4">
+            <h3 className="font-bold mb-3 flex items-center gap-2" style={{ color: fighter2.color }}>
+              <Icon name="Gamepad2" size={20} />
+              Player 2 Управление
+            </h3>
+            <div className="space-y-2 text-sm text-gray-300">
+              <div className="flex justify-between">
+                <span>Движение:</span>
+                <span className="font-mono bg-muted px-2 rounded">← / →</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Прыжок:</span>
+                <span className="font-mono bg-muted px-2 rounded">↑</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Атака:</span>
+                <span className="font-mono bg-muted px-2 rounded">ENTER</span>
+              </div>
+            </div>
           </Card>
         </div>
-      )}
+      </div>
     </div>
   );
 };
