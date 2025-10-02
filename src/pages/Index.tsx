@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 
 interface Fighter {
@@ -16,6 +17,18 @@ interface Fighter {
   isAttacking: boolean;
   velocityY: number;
   isJumping: boolean;
+  comboMove: string | null;
+  keySequence: string[];
+}
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  color: string;
+  size: number;
 }
 
 const CANVAS_WIDTH = 800;
@@ -25,13 +38,19 @@ const GRAVITY = 0.8;
 const JUMP_FORCE = -15;
 const MOVE_SPEED = 5;
 const ATTACK_DAMAGE = 10;
+const FIRE_DAMAGE = 25;
+const HEAVY_DAMAGE = 35;
 const ATTACK_RANGE = 60;
+const COMBO_TIMEOUT = 800;
 
 const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
+  const [showComboMenu, setShowComboMenu] = useState(true);
   const keysPressed = useRef<Set<string>>(new Set());
+  const [particles, setParticles] = useState<Particle[]>([]);
+  const comboTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const [fighter1, setFighter1] = useState<Fighter>({
     id: 1,
@@ -44,7 +63,9 @@ const Index = () => {
     direction: 'right',
     isAttacking: false,
     velocityY: 0,
-    isJumping: false
+    isJumping: false,
+    comboMove: null,
+    keySequence: []
   });
 
   const [fighter2, setFighter2] = useState<Fighter>({
@@ -58,8 +79,26 @@ const Index = () => {
     direction: 'left',
     isAttacking: false,
     velocityY: 0,
-    isJumping: false
+    isJumping: false,
+    comboMove: null,
+    keySequence: []
   });
+
+  const createParticles = (x: number, y: number, color: string, count: number = 20) => {
+    const newParticles: Particle[] = [];
+    for (let i = 0; i < count; i++) {
+      newParticles.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 10,
+        vy: (Math.random() - 0.5) * 10,
+        life: 1,
+        color,
+        size: Math.random() * 8 + 4
+      });
+    }
+    setParticles(prev => [...prev, ...newParticles]);
+  };
 
   const checkCollision = (f1: Fighter, f2: Fighter): boolean => {
     const distance = Math.abs(f1.x - f2.x);
@@ -67,8 +106,23 @@ const Index = () => {
   };
 
   const attack = (attacker: Fighter, defender: Fighter, setDefender: Function) => {
-    if (attacker.isAttacking && checkCollision(attacker, defender)) {
-      const newHealth = Math.max(0, defender.health - ATTACK_DAMAGE);
+    if ((attacker.isAttacking || attacker.comboMove) && checkCollision(attacker, defender)) {
+      let damage = ATTACK_DAMAGE;
+      let particleColor = attacker.color;
+      
+      if (attacker.comboMove === 'fire') {
+        damage = FIRE_DAMAGE;
+        particleColor = '#FF6B00';
+        createParticles(defender.x + 25, defender.y + 40, particleColor, 30);
+      } else if (attacker.comboMove === 'heavy') {
+        damage = HEAVY_DAMAGE;
+        particleColor = '#FFD700';
+        createParticles(defender.x + 25, defender.y + 40, particleColor, 25);
+      } else {
+        createParticles(defender.x + 25, defender.y + 40, particleColor, 15);
+      }
+      
+      const newHealth = Math.max(0, defender.health - damage);
       setDefender((prev: Fighter) => ({ ...prev, health: newHealth }));
       
       if (newHealth === 0) {
@@ -78,9 +132,51 @@ const Index = () => {
     }
   };
 
+  const checkCombo = (sequence: string[], player: 1 | 2): string | null => {
+    const seqStr = sequence.join('');
+    const player1Keys = ['a', 'f'];
+    const player2Keys = ['arrowleft', 'shift'];
+    
+    const keys = player === 1 ? player1Keys : player2Keys;
+    
+    if (seqStr === keys[0] + keys[1]) return 'fire';
+    if (seqStr === keys[1] + keys[1]) return 'heavy';
+    
+    return null;
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      keysPressed.current.add(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keysPressed.current.add(key);
+      
+      if (key === 'f') {
+        setFighter1(prev => {
+          const newSeq = [...prev.keySequence, key].slice(-2);
+          const combo = checkCombo(newSeq, 1);
+          
+          if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+          comboTimerRef.current = setTimeout(() => {
+            setFighter1(p => ({ ...p, keySequence: [] }));
+          }, COMBO_TIMEOUT);
+          
+          return { ...prev, keySequence: newSeq, comboMove: combo };
+        });
+      }
+      
+      if (key === 'shift') {
+        setFighter2(prev => {
+          const newSeq = [...prev.keySequence, key].slice(-2);
+          const combo = checkCombo(newSeq, 2);
+          
+          if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+          comboTimerRef.current = setTimeout(() => {
+            setFighter2(p => ({ ...p, keySequence: [] }));
+          }, COMBO_TIMEOUT);
+          
+          return { ...prev, keySequence: newSeq, comboMove: combo };
+        });
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -93,6 +189,7 @@ const Index = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
     };
   }, []);
 
@@ -107,6 +204,7 @@ const Index = () => {
         let newIsJumping = prev.isJumping;
         let newDirection = prev.direction;
         let newIsAttacking = false;
+        const newComboMove = prev.comboMove;
 
         if (keysPressed.current.has('a') && newX > 50) {
           newX -= MOVE_SPEED;
@@ -120,11 +218,17 @@ const Index = () => {
           newVelocityY = JUMP_FORCE;
           newIsJumping = true;
         }
-        if (keysPressed.current.has(' ')) {
-          newIsAttacking = true;
-          setTimeout(() => {
-            setFighter1(f => ({ ...f, isAttacking: false }));
-          }, 200);
+        if (keysPressed.current.has('f')) {
+          if (newComboMove) {
+            setTimeout(() => {
+              setFighter1(f => ({ ...f, comboMove: null, isAttacking: false }));
+            }, 400);
+          } else {
+            newIsAttacking = true;
+            setTimeout(() => {
+              setFighter1(f => ({ ...f, isAttacking: false }));
+            }, 200);
+          }
         }
 
         newVelocityY += GRAVITY;
@@ -143,7 +247,8 @@ const Index = () => {
           velocityY: newVelocityY,
           isJumping: newIsJumping,
           direction: newDirection,
-          isAttacking: newIsAttacking
+          isAttacking: newIsAttacking,
+          comboMove: newComboMove
         };
       });
 
@@ -154,6 +259,7 @@ const Index = () => {
         let newIsJumping = prev.isJumping;
         let newDirection = prev.direction;
         let newIsAttacking = false;
+        const newComboMove = prev.comboMove;
 
         if (keysPressed.current.has('arrowleft') && newX > 50) {
           newX -= MOVE_SPEED;
@@ -167,11 +273,17 @@ const Index = () => {
           newVelocityY = JUMP_FORCE;
           newIsJumping = true;
         }
-        if (keysPressed.current.has('enter')) {
-          newIsAttacking = true;
-          setTimeout(() => {
-            setFighter2(f => ({ ...f, isAttacking: false }));
-          }, 200);
+        if (keysPressed.current.has('shift')) {
+          if (newComboMove) {
+            setTimeout(() => {
+              setFighter2(f => ({ ...f, comboMove: null, isAttacking: false }));
+            }, 400);
+          } else {
+            newIsAttacking = true;
+            setTimeout(() => {
+              setFighter2(f => ({ ...f, isAttacking: false }));
+            }, 200);
+          }
         }
 
         newVelocityY += GRAVITY;
@@ -190,25 +302,36 @@ const Index = () => {
           velocityY: newVelocityY,
           isJumping: newIsJumping,
           direction: newDirection,
-          isAttacking: newIsAttacking
+          isAttacking: newIsAttacking,
+          comboMove: newComboMove
         };
       });
+
+      setParticles(prev => 
+        prev.map(p => ({
+          ...p,
+          x: p.x + p.vx,
+          y: p.y + p.vy,
+          vy: p.vy + 0.3,
+          life: p.life - 0.02
+        })).filter(p => p.life > 0)
+      );
     }, 1000 / 60);
 
     return () => clearInterval(gameLoop);
   }, [gameStarted]);
 
   useEffect(() => {
-    if (fighter1.isAttacking) {
+    if (fighter1.isAttacking || fighter1.comboMove) {
       attack(fighter1, fighter2, setFighter2);
     }
-  }, [fighter1.isAttacking]);
+  }, [fighter1.isAttacking, fighter1.comboMove]);
 
   useEffect(() => {
-    if (fighter2.isAttacking) {
+    if (fighter2.isAttacking || fighter2.comboMove) {
       attack(fighter2, fighter1, setFighter1);
     }
-  }, [fighter2.isAttacking]);
+  }, [fighter2.isAttacking, fighter2.comboMove]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -225,6 +348,15 @@ const Index = () => {
     ctx.fillStyle = '#2d3748';
     ctx.fillRect(0, GROUND_Y + 30, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y - 30);
 
+    particles.forEach(p => {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
     const drawFighter = (fighter: Fighter) => {
       ctx.save();
       
@@ -235,7 +367,38 @@ const Index = () => {
       ctx.fillRect(fighter.x + 15, fighter.y + 20, 8, 8);
       ctx.fillRect(fighter.x + 27, fighter.y + 20, 8, 8);
 
-      if (fighter.isAttacking) {
+      if (fighter.comboMove === 'fire') {
+        ctx.fillStyle = '#FF6B00';
+        const punchX = fighter.direction === 'right' ? fighter.x + 50 : fighter.x - 40;
+        ctx.fillRect(punchX, fighter.y + 25, 40, 20);
+        
+        for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = i % 2 === 0 ? '#FF6B00' : '#FFD700';
+          ctx.beginPath();
+          ctx.arc(punchX + 20 + i * 15, fighter.y + 35, 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        ctx.fillStyle = '#FF6B00';
+        ctx.font = 'bold 16px Montserrat';
+        ctx.fillText('🔥 FIRE!', fighter.x - 20, fighter.y - 10);
+      } else if (fighter.comboMove === 'heavy') {
+        ctx.fillStyle = '#FFD700';
+        const punchX = fighter.direction === 'right' ? fighter.x + 50 : fighter.x - 50;
+        ctx.fillRect(punchX, fighter.y + 20, 50, 30);
+        
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 4;
+        for (let i = 0; i < 3; i++) {
+          ctx.beginPath();
+          ctx.arc(punchX + 25, fighter.y + 35, 15 + i * 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 16px Montserrat';
+        ctx.fillText('💥 HEAVY!', fighter.x - 20, fighter.y - 10);
+      } else if (fighter.isAttacking) {
         ctx.fillStyle = fighter.color;
         const punchX = fighter.direction === 'right' ? fighter.x + 50 : fighter.x - 30;
         ctx.fillRect(punchX, fighter.y + 30, 30, 15);
@@ -252,13 +415,14 @@ const Index = () => {
 
     drawFighter(fighter1);
     drawFighter(fighter2);
-  }, [fighter1, fighter2]);
+  }, [fighter1, fighter2, particles]);
 
   const startGame = () => {
-    setFighter1(prev => ({ ...prev, health: 100 }));
-    setFighter2(prev => ({ ...prev, health: 100 }));
+    setFighter1(prev => ({ ...prev, health: 100, keySequence: [], comboMove: null }));
+    setFighter2(prev => ({ ...prev, health: 100, keySequence: [], comboMove: null }));
     setWinner(null);
     setGameStarted(true);
+    setParticles([]);
   };
 
   return (
@@ -276,6 +440,11 @@ const Index = () => {
                 <span className="text-sm text-gray-400">{fighter1.health} HP</span>
               </div>
               <Progress value={(fighter1.health / fighter1.maxHealth) * 100} className="h-4" />
+              {fighter1.comboMove && (
+                <div className="mt-2 text-sm font-bold text-orange-400">
+                  🔥 COMBO: {fighter1.comboMove === 'fire' ? 'FIRE STRIKE!' : 'HEAVY PUNCH!'}
+                </div>
+              )}
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -283,6 +452,11 @@ const Index = () => {
                 <span className="text-sm text-gray-400">{fighter2.health} HP</span>
               </div>
               <Progress value={(fighter2.health / fighter2.maxHealth) * 100} className="h-4" />
+              {fighter2.comboMove && (
+                <div className="mt-2 text-sm font-bold text-orange-400">
+                  🔥 COMBO: {fighter2.comboMove === 'fire' ? 'FIRE STRIKE!' : 'HEAVY PUNCH!'}
+                </div>
+              )}
             </div>
           </div>
 
@@ -320,49 +494,136 @@ const Index = () => {
           </div>
         </Card>
 
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="bg-card border border-border p-4">
-            <h3 className="font-bold mb-3 flex items-center gap-2" style={{ color: fighter1.color }}>
-              <Icon name="Gamepad2" size={20} />
-              Player 1 Управление
-            </h3>
-            <div className="space-y-2 text-sm text-gray-300">
-              <div className="flex justify-between">
-                <span>Движение:</span>
-                <span className="font-mono bg-muted px-2 rounded">A / D</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Прыжок:</span>
-                <span className="font-mono bg-muted px-2 rounded">W</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Атака:</span>
-                <span className="font-mono bg-muted px-2 rounded">SPACE</span>
-              </div>
-            </div>
-          </Card>
+        <Tabs defaultValue="controls" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="controls">Управление</TabsTrigger>
+            <TabsTrigger value="combos">Комбо Удары</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="controls" className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="bg-card border border-border p-4">
+                <h3 className="font-bold mb-3 flex items-center gap-2" style={{ color: fighter1.color }}>
+                  <Icon name="Gamepad2" size={20} />
+                  Player 1
+                </h3>
+                <div className="space-y-2 text-sm text-gray-300">
+                  <div className="flex justify-between">
+                    <span>Движение:</span>
+                    <span className="font-mono bg-muted px-2 rounded">A / D</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Прыжок:</span>
+                    <span className="font-mono bg-muted px-2 rounded">W</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Атака:</span>
+                    <span className="font-mono bg-muted px-2 rounded">F</span>
+                  </div>
+                </div>
+              </Card>
 
-          <Card className="bg-card border border-border p-4">
-            <h3 className="font-bold mb-3 flex items-center gap-2" style={{ color: fighter2.color }}>
-              <Icon name="Gamepad2" size={20} />
-              Player 2 Управление
-            </h3>
-            <div className="space-y-2 text-sm text-gray-300">
-              <div className="flex justify-between">
-                <span>Движение:</span>
-                <span className="font-mono bg-muted px-2 rounded">← / →</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Прыжок:</span>
-                <span className="font-mono bg-muted px-2 rounded">↑</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Атака:</span>
-                <span className="font-mono bg-muted px-2 rounded">ENTER</span>
-              </div>
+              <Card className="bg-card border border-border p-4">
+                <h3 className="font-bold mb-3 flex items-center gap-2" style={{ color: fighter2.color }}>
+                  <Icon name="Gamepad2" size={20} />
+                  Player 2
+                </h3>
+                <div className="space-y-2 text-sm text-gray-300">
+                  <div className="flex justify-between">
+                    <span>Движение:</span>
+                    <span className="font-mono bg-muted px-2 rounded">← / →</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Прыжок:</span>
+                    <span className="font-mono bg-muted px-2 rounded">↑</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Атака:</span>
+                    <span className="font-mono bg-muted px-2 rounded">SHIFT</span>
+                  </div>
+                </div>
+              </Card>
             </div>
-          </Card>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="combos" className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="bg-card border-2 border-orange-500 p-4">
+                <h3 className="font-bold mb-4 flex items-center gap-2 text-orange-400 text-lg">
+                  <Icon name="Flame" size={24} />
+                  Player 1 Комбо
+                </h3>
+                <div className="space-y-3">
+                  <div className="bg-muted p-3 rounded-lg border border-orange-500/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-orange-400">🔥 Огненный Удар</span>
+                      <span className="text-xs text-gray-400">25 урона</span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">A</kbd>
+                      <span className="text-gray-400">+</span>
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">F</kbd>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-muted p-3 rounded-lg border border-yellow-500/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-yellow-400">💥 Жёсткий Удар</span>
+                      <span className="text-xs text-gray-400">35 урона</span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">F</kbd>
+                      <span className="text-gray-400">+</span>
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">F</kbd>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="bg-card border-2 border-red-500 p-4">
+                <h3 className="font-bold mb-4 flex items-center gap-2 text-red-400 text-lg">
+                  <Icon name="Flame" size={24} />
+                  Player 2 Комбо
+                </h3>
+                <div className="space-y-3">
+                  <div className="bg-muted p-3 rounded-lg border border-orange-500/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-orange-400">🔥 Огненный Удар</span>
+                      <span className="text-xs text-gray-400">25 урона</span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">←</kbd>
+                      <span className="text-gray-400">+</span>
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">SHIFT</kbd>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-muted p-3 rounded-lg border border-yellow-500/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-yellow-400">💥 Жёсткий Удар</span>
+                      <span className="text-xs text-gray-400">35 урона</span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">SHIFT</kbd>
+                      <span className="text-gray-400">+</span>
+                      <kbd className="px-3 py-1 bg-background rounded font-mono text-sm">SHIFT</kbd>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            <Card className="bg-muted/50 border border-primary/30 p-4">
+              <div className="flex gap-3">
+                <Icon name="Info" className="text-primary flex-shrink-0 mt-0.5" size={20} />
+                <div className="text-sm text-gray-300">
+                  <p className="font-bold mb-1">Как использовать комбо:</p>
+                  <p>Быстро нажимайте клавиши одну за другой. Между нажатиями должно пройти менее 0.8 секунды. Комбо активируется автоматически при правильной последовательности!</p>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
